@@ -5,6 +5,7 @@ inherit packagegroup
 PACKAGES = " \
     ${PN}-board-generic \
     ${PN}-qcom-generic \
+    ${PN}-qcom-hamoa-iot-soc \
     ${PN}-qcom-qcm2290-soc \
     ${PN}-qcom-qcs6490-soc \
     ${PN}-qcom-qcs8300-soc \
@@ -92,6 +93,15 @@ RRECOMMENDS:${PN}-qcom-generic += " \
 "
 
 # The packagegroups below are SoC specific
+
+
+RRECOMMENDS:${PN}-qcom-hamoa-iot-soc += " \
+    ${PN}-board-generic \
+    ${PN}-qcom-generic \
+    kernel-module-ath11k-pci \
+    kernel-module-phy-qcom-sgmii-eth \
+    kernel-module-pwrseq-qcom-wcn \
+"
 
 RRECOMMENDS:${PN}-qcom-qcm2290-soc += " \
     ${PN}-board-generic \
