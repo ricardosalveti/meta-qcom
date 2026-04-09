@@ -6,13 +6,17 @@ Subject: [PATCH] video: Add support for NV12_Q08C (compressed 8-bit) format
 Upstream-Status: Denied [https://gitlab.freedesktop.org/gstreamer/gstreamer/-/merge_requests/9712]
 
 Signed-off-by: Pratik Pachange <ppachang@qti.qualcomm.com>
+Signed-off-by: Bala Sai Kosuri <bkosuri@qti.qualcomm.com>
 ---
- gst-libs/gst/video/video-format.c | 23 ++++++++++++++++++++++
- gst-libs/gst/video/video-format.h | 10 +++++++++-
- gst-libs/gst/video/video-info.c   | 32 +++++++++++++++++++++++++++++++
- gst-libs/gst/video/video-scaler.c |  1 +
- tests/check/libs/video.c          |  4 ++++
- 5 files changed, 69 insertions(+), 1 deletion(-)
+ gst-libs/gst/video/video-format.c   | 23 +++++++++++++++++++++
+ gst-libs/gst/video/video-format.h   | 10 ++++++++-
+ gst-libs/gst/video/video-info-dma.c |  1 +
+ gst-libs/gst/video/video-info.c     | 32 +++++++++++++++++++++++++++++
+ gst-libs/gst/video/video-scaler.c   |  1 +
+ tests/check/elements/videoconvert.c |  3 +++
+ tests/check/elements/videoscale.c   |  1 +
+ tests/check/libs/video.c            |  8 ++++++--
+ 8 files changed, 76 insertions(+), 3 deletions(-)
 
 diff --git a/gst-libs/gst/video/video-format.c b/gst-libs/gst/video/video-format.c
 index 9bd9c69..b28abc3 100644
@@ -43,17 +47,17 @@ index 9bd9c69..b28abc3 100644
  #define PACK_AV12 GST_VIDEO_FORMAT_AYUV, unpack_AV12, 1, pack_AV12
  static void
  unpack_AV12 (const GstVideoFormatInfo * info, GstVideoPackFlags flags,
-@@ -8108,6 +8126,9 @@ static const VideoFormat formats[] = {
-       PSTR8888, PLANE0, OFFS0, SUB4444, PACK_Y416_BE),
-   MAKE_GRAY_LE_FORMAT (GRAY10_LE16, "raw video", DPTH10, PSTR2, PLANE0, OFFS0,
-       SUB4, PACK_GRAY10_LE16),
+@@ -8269,6 +8287,9 @@ static const VideoFormat formats[] = {
+       PLANE0, OFFS0, SUB4444, PACK_BGR10A2_LE),
+   MAKE_RGB_LE_FORMAT (RGB10x2_LE, "raw video", DPTH10_10_10, PSTR444,
+       PLANE0, OFFS0, SUB4444, PACK_RGB10A2_LE),
 +  MAKE_YUV_FORMAT (NV12_Q08C, "raw video",
 +      GST_MAKE_FOURCC ('Q', '0', '8', 'C'), DPTH888, PSTR122, PLANE011,
 +      OFFS001, SUB420, PACK_NV12_Q08C),
  };
  
  G_GNUC_END_IGNORE_DEPRECATIONS;
-@@ -8368,6 +8389,8 @@ gst_video_format_from_fourcc (guint32 fourcc)
+@@ -8529,6 +8550,8 @@ gst_video_format_from_fourcc (guint32 fourcc)
        return GST_VIDEO_FORMAT_VUYA;
      case GST_MAKE_FOURCC ('A', 'R', '3', '0'):
        return GST_VIDEO_FORMAT_BGR10A2_LE;
@@ -66,17 +70,17 @@ diff --git a/gst-libs/gst/video/video-format.h b/gst-libs/gst/video/video-format
 index b59ec38..6593f8a 100644
 --- a/gst-libs/gst/video/video-format.h
 +++ b/gst-libs/gst/video/video-format.h
-@@ -174,6 +174,7 @@ G_BEGIN_DECLS
-  * @GST_VIDEO_FORMAT_Y416_LE: packed 4:4:4:4 YUV, 16 bits per channel(U-Y-V-A) (Since: 1.26)
-  * @GST_VIDEO_FORMAT_Y416_BE: packed 4:4:4:4 YUV, 16 bits per channel(U-Y-V-A) (Since: 1.26)
-  * @GST_VIDEO_FORMAT_GRAY10_LE16: 10-bit grayscale, packed into 16bit words (6 bits padding) (Since: 1.26)
+@@ -177,6 +177,7 @@ G_BEGIN_DECLS
+  * @GST_VIDEO_FORMAT_NV16_10LE40: Fully packed variant of NV16_10LE32 (Since: 1.28)
+  * @GST_VIDEO_FORMAT_BGR10x2_LE: packed 4:4:4 RGB (B-G-R-x), 10 bits for R/G/B channel and MSB 2 bits for padding (Since: 1.28)
+  * @GST_VIDEO_FORMAT_RGB10x2_LE: packed 4:4:4 RGB (R-G-B-x), 10 bits for R/G/B channel and MSB 2 bits for padding (Since: 1.28)
 + * @GST_VIDEO_FORMAT_NV12_Q08C: Qualcomm NV12 8bit compressed format
   *
   * Enum value describing the most common video formats.
   *
-@@ -670,6 +671,13 @@ typedef enum {
+@@ -701,6 +702,13 @@ typedef enum {
     */
-   GST_VIDEO_FORMAT_GRAY10_LE16,
+   GST_VIDEO_FORMAT_RGB10x2_LE,
  
 +  /**
 +   * GST_VIDEO_FORMAT_NV12_Q08C:
@@ -88,20 +92,32 @@ index b59ec38..6593f8a 100644
    /* Update GST_VIDEO_FORMAT_LAST below when adding more formats here */
  } GstVideoFormat;
  
-@@ -680,7 +688,7 @@ typedef enum {
+@@ -711,7 +719,7 @@ typedef enum {
   *
   * Since: 1.26
   */
--#define GST_VIDEO_FORMAT_LAST (GST_VIDEO_FORMAT_GRAY10_LE16 + 1)
+-#define GST_VIDEO_FORMAT_LAST (GST_VIDEO_FORMAT_RGB10x2_LE + 1)
 +#define GST_VIDEO_FORMAT_LAST (GST_VIDEO_FORMAT_NV12_Q08C + 1)
  
  #define GST_VIDEO_MAX_PLANES 4
  #define GST_VIDEO_MAX_COMPONENTS 4
+diff --git a/gst-libs/gst/video/video-info-dma.c b/gst-libs/gst/video/video-info-dma.c
+index 16c1cff..4a2c486 100644
+--- a/gst-libs/gst/video/video-info-dma.c
++++ b/gst-libs/gst/video/video-info-dma.c
+@@ -596,6 +596,7 @@ static const struct FormatMap
+   {GST_VIDEO_FORMAT_GRAY16_BE, DRM_FORMAT_R16 | DRM_FORMAT_BIG_ENDIAN, DRM_FORMAT_MOD_LINEAR},
+   {GST_VIDEO_FORMAT_NV16_10LE40, DRM_FORMAT_NV20, DRM_FORMAT_MOD_LINEAR},
+   {GST_VIDEO_FORMAT_P016_LE, DRM_FORMAT_P016, DRM_FORMAT_MOD_LINEAR},
++  {GST_VIDEO_FORMAT_NV12_Q08C, DRM_FORMAT_NV12, DRM_FORMAT_MOD_QCOM_COMPRESSED},
+ };
+ /* *INDENT-ON* */
+ 
 diff --git a/gst-libs/gst/video/video-info.c b/gst-libs/gst/video/video-info.c
 index 04d52b0..f86b9b3 100644
 --- a/gst-libs/gst/video/video-info.c
 +++ b/gst-libs/gst/video/video-info.c
-@@ -1389,6 +1389,38 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
+@@ -1398,6 +1398,38 @@ fill_planes (GstVideoInfo * info, gsize plane_size[GST_VIDEO_MAX_PLANES])
        info->size = info->offset[1] + info->offset[1] / 2;
        break;
      }
@@ -152,10 +168,47 @@ index d645087..0fa9e3d 100644
        *bits = 8;
        *n_elems = 2;
        break;
+diff --git a/tests/check/elements/videoconvert.c b/tests/check/elements/videoconvert.c
+index 420564a..4668a9b 100644
+--- a/tests/check/elements/videoconvert.c
++++ b/tests/check/elements/videoconvert.c
+@@ -76,6 +76,9 @@ check_pad_template (GstPadTemplate * tmpl)
+     if (i == GST_VIDEO_FORMAT_DMA_DRM)
+       continue;
+ 
++    if (i == GST_VIDEO_FORMAT_NV12_Q08C)
++      continue;
++
+     if (!formats_supported[i]) {
+       g_error ("videoconvert doesn't support format '%s'",
+           gst_video_format_to_string ((GstVideoFormat) i));
+diff --git a/tests/check/elements/videoscale.c b/tests/check/elements/videoscale.c
+index b2297cb..5edca5a 100644
+--- a/tests/check/elements/videoscale.c
++++ b/tests/check/elements/videoscale.c
+@@ -122,6 +122,7 @@ check_pad_template (GstPadTemplate * tmpl)
+         case GST_VIDEO_FORMAT_DMA_DRM:
+         case GST_VIDEO_FORMAT_MT2110T:
+         case GST_VIDEO_FORMAT_MT2110R:
++        case GST_VIDEO_FORMAT_NV12_Q08C:
+           GST_LOG ("Ignoring lack of support for format %s", fmt_str);
+           break;
+         default:
 diff --git a/tests/check/libs/video.c b/tests/check/libs/video.c
 index 78a1786..5f8af9d 100644
 --- a/tests/check/libs/video.c
 +++ b/tests/check/libs/video.c
+@@ -389,8 +389,8 @@ GST_START_TEST (test_video_formats_all)
+     fail_if (gst_video_format_from_string (fmt_str) ==
+         GST_VIDEO_FORMAT_UNKNOWN);
+   }
+-  /* Take into account GST_VIDEO_FORMAT_ENCODED, UNKNOWN and DMA_DRM. */
+-  fail_unless_equals_int (num, GST_VIDEO_FORMAT_LAST - 3);
++  /* Take into account GST_VIDEO_FORMAT_ENCODED, UNKNOWN, DMA_DRM and NV12_Q08C */
++  fail_unless_equals_int (num, GST_VIDEO_FORMAT_LAST - 4);
+ 
+   gst_caps_unref (caps);
+ }
 @@ -2185,6 +2185,9 @@ GST_START_TEST (test_video_pack_unpack2)
      if (format == GST_VIDEO_FORMAT_DMA_DRM)
        continue;
