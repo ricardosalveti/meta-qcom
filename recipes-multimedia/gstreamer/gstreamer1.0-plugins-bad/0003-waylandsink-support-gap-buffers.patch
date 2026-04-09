@@ -16,7 +16,7 @@ diff --git a/ext/wayland/gstwaylandsink.c b/ext/wayland/gstwaylandsink.c
 index a7187c5..b1bec1c 100644
 --- a/ext/wayland/gstwaylandsink.c
 +++ b/ext/wayland/gstwaylandsink.c
-@@ -904,6 +904,13 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
+@@ -1105,6 +1105,13 @@ gst_wayland_sink_show_frame (GstVideoSink * vsink, GstBuffer * buffer)
      }
    }
  
