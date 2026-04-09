@@ -24,13 +24,14 @@ board-specific GPIO toggles.  Convert the CONFIG_TC956X_PLATFORM_SUPPORT
 
 Upstream-Status: Submitted [https://github.com/TC956X/TC9564_Host_Driver/pull/6]
 Signed-off-by: Mohd Ayaan Anwar <mohd.anwar@oss.qualcomm.com>
+Signed-off-by: Ricardo Salveti <ricardo.salveti@oss.qualcomm.com>
 ---
  drivers/net/ethernet/toshiba/tc956x/Makefile  |   3 +
- .../net/ethernet/toshiba/tc956x/tc956x_gpio.c |  57 ++++
+ .../net/ethernet/toshiba/tc956x/tc956x_gpio.c |  67 +++++
  .../net/ethernet/toshiba/tc956x/tc956x_qcom.c | 258 ++++++++++++++++++
  .../net/ethernet/toshiba/tc956x/tc956xmac.h   |   8 +-
  .../ethernet/toshiba/tc956x/tc956xmac_main.c  |  39 ---
- 5 files changed, 324 insertions(+), 41 deletions(-)
+ 5 files changed, 334 insertions(+), 41 deletions(-)
  create mode 100644 drivers/net/ethernet/toshiba/tc956x/tc956x_gpio.c
  create mode 100644 drivers/net/ethernet/toshiba/tc956x/tc956x_qcom.c
 
@@ -50,10 +51,10 @@ index d6279c1..5c3e4aa 100644
  
 diff --git a/drivers/net/ethernet/toshiba/tc956x/tc956x_gpio.c b/drivers/net/ethernet/toshiba/tc956x/tc956x_gpio.c
 new file mode 100644
-index 0000000..2300b5d
+index 0000000..bfa49e0
 --- /dev/null
 +++ b/drivers/net/ethernet/toshiba/tc956x/tc956x_gpio.c
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,67 @@
 +// SPDX-License-Identifier: GPL-2.0-only
 +// Copyright (c) Qualcomm Technologies, Inc. and/or its subsidiaries.
 +
@@ -61,6 +62,7 @@ index 0000000..2300b5d
 + * tc956x_gpio.c - Minimal GPIO controller driver for  QPS615 PHY reset lines.
 +*/
 +
++#include <linux/version.h>
 +#include <linux/gpio/driver.h>
 +
 +#include "tc956xmac.h"
@@ -84,12 +86,21 @@ index 0000000..2300b5d
 +					   offset, value ? 1 : 0);
 +}
 +
++#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 17, 0)
++static void tc956x_gpio_set(struct gpio_chip *chip, unsigned int offset,
++			    int value)
++{
++	tc956x_GPIO_OutputConfigPin(to_tc956x_gpio(chip)->priv,
++				    offset, value ? 1 : 0);
++}
++#else
 +static int tc956x_gpio_set(struct gpio_chip *chip, unsigned int offset,
 +			    int value)
 +{
 +	return tc956x_GPIO_OutputConfigPin(to_tc956x_gpio(chip)->priv,
 +					   offset, value ? 1 : 0);
 +}
++#endif
 +
 +int tc956x_gpio_register(struct tc956xmac_priv *priv)
 +{
@@ -376,10 +387,10 @@ index 0000000..4f69734
 +	return ret;
 +}
 diff --git a/drivers/net/ethernet/toshiba/tc956x/tc956xmac.h b/drivers/net/ethernet/toshiba/tc956x/tc956xmac.h
-index 687c4b4..8b0abcd 100644
+index c8a35de..f6bfda8 100644
 --- a/drivers/net/ethernet/toshiba/tc956x/tc956xmac.h
 +++ b/drivers/net/ethernet/toshiba/tc956x/tc956xmac.h
-@@ -1294,16 +1294,20 @@ int tc956x_platform_suspend(struct tc956xmac_priv *priv);
+@@ -1296,16 +1296,20 @@ int tc956x_platform_suspend(struct tc956xmac_priv *priv);
  int tc956x_platform_resume(struct tc956xmac_priv *priv);
  int tc956x_platform_port_interface_overlay(struct device *dev, struct tc956xmac_resources *res);
  #else
@@ -403,10 +414,10 @@ index 687c4b4..8b0abcd 100644
  int tc956x_vf_get_fn_idx_from_int_sts(struct tc956xmac_priv *priv,
  					     struct fn_id *fn_id_info);
 diff --git a/drivers/net/ethernet/toshiba/tc956x/tc956xmac_main.c b/drivers/net/ethernet/toshiba/tc956x/tc956xmac_main.c
-index 8274191..264aa0d 100644
+index ec05579..e3002d1 100644
 --- a/drivers/net/ethernet/toshiba/tc956x/tc956xmac_main.c
 +++ b/drivers/net/ethernet/toshiba/tc956x/tc956xmac_main.c
-@@ -15363,45 +15363,6 @@ static int validate_rsc_mgr_alloc(struct tc956xmac_priv *priv, struct net_device
+@@ -15365,45 +15365,6 @@ static int validate_rsc_mgr_alloc(struct tc956xmac_priv *priv, struct net_device
  	return ret;
  }
  #endif
