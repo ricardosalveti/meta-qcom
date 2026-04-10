@@ -8,7 +8,6 @@ Requires=dev-disk-by\x2dpartlabel-persist.device
 After=dev-disk-by\x2dpartlabel-persist.device
 ConditionPathExists=/dev/disk/by-partlabel/persist
 Before=var-lib-tee.mount
-Wants=var-lib-tee.mount
 ConditionPathIsMountPoint=!/var/lib/tee
 
 [Service]
