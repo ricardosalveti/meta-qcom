@@ -3,7 +3,7 @@ header:
 overrides:
     repos:
         oe-core:
-            commit: 5a60dca0fb81695e26149e45aad9a9eee7c955ec
+            commit: a85255af842321f685b01b373facee487575f5f6
         bitbake:
             commit: 5d722b5d65e4eef7befe6376983385421e993f86
         meta-arm:
@@ -11,7 +11,7 @@ overrides:
         meta-qcom-distro:
             commit: fde6b0a7113941bc78a45b7fa618e837ce9f13a4
         meta-openembedded:
-            commit: d793c367e067c49956d38caf6eb84cb112c9c9b7
+            commit: 1bdc3c1c6d26e1d118a624a3efc8a1c18df51d84
         meta-virtualization:
             commit: 4dddf149832ef19233c13af31987bcd6b1faf4cd
         meta-audioreach:
