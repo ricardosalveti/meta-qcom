@@ -1,10 +1,10 @@
-name: Test PR build
+name: Test PR build (master)
 
 run-name: "Tests triggered by PR: ${{ github.event.workflow_run.display_title }}"
 
 on:
   workflow_run:
-    workflows: ["Build on PR"]
+    workflows: ["Build on PR (master)"]
     types:
       - completed
 

@@ -1,7 +1,9 @@
-name: Build on PR
+name: Build on PR (master)
 
 on:
   pull_request:
+    branches:
+      - master
     paths-ignore:
       - 'README.md'
       - 'README'
