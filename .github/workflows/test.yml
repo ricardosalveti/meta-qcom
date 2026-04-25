@@ -6,6 +6,10 @@ on:
       build_id:
         required: true
         type: string
+      git_ref:
+        required: false
+        type: string
+        default: ""
     outputs:
       summary_id:
         description: "ID of the test summary artifact"
@@ -44,6 +48,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.git_ref }}
 
       - name: Run lava-test-plans
         uses: ./.github/actions/lava-test-plans
@@ -65,6 +70,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.git_ref }}
 
       - name: "List jobs"
         id: listjobs
@@ -171,6 +177,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.git_ref }}
 
       - name: Run lava-test-plans
         uses: ./.github/actions/lava-test-plans
@@ -193,6 +200,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.git_ref }}
 
       - name: "List jobs"
         id: listjobs
@@ -248,6 +256,7 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+          ref: ${{ inputs.git_ref }}
 
       - name: Generate Summary
         id: generate-summary
