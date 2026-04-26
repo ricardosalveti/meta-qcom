@@ -155,11 +155,13 @@ RRECOMMENDS:${PN}-qcom-qcm2290-soc += " \
 RRECOMMENDS:${PN}-qcom-qcs615-soc += " \
     ${PN}-board-generic \
     ${PN}-qcom-generic \
+    kernel-module-ath11k-ahb \
     kernel-module-ath11k-pci \
     kernel-module-camcc-qcs615 \
     kernel-module-dispcc-qcs615 \
     kernel-module-gpucc-qcs615 \
     kernel-module-pwrseq-qcom-wcn \
+    kernel-module-snd-soc-da7213 \
     kernel-module-stmmac-platform \
     kernel-module-videocc-qcs615 \
 "
