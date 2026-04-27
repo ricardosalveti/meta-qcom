@@ -1,0 +1,22 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+# KAS fragment for U-Boot FIT image based kernel configuration
+# Use with: kas shell ci/rb3gen2-core-kit.yml:ci/u-boot-qcom.yml:ci/kernel-fit-image.yml:ci/rb3gen2-core-kit-fit-image.yml
+
+header:
+  version: 14
+
+local_conf_header:
+  kernel_fit_config: |
+    # Remove conflicting kernel classes
+    KERNEL_CLASSES:remove = "linux-qcom-bootimg linux-qcom-dtbbin"
+    
+    # Enable FIT image generation with extra artifacts
+    KERNEL_CLASSES += "kernel-fit-extra-artifacts"
+    
+    # Configure initramfs to be bundled into FIT image
+    INITRAMFS_IMAGE = "core-image-minimal-initramfs"
+    INITRAMFS_IMAGE_BUNDLE = "0"
+    
+    # Restrict KERNEL_DEVICETREE to rb3gen2-core-kit variants only
+    # Avoid bloat from 40+ DTBs; include only rb3gen2-specific DTBs
+    KERNEL_DEVICETREE = "qcom/qcs6490-rb3gen2.dtb qcom/qcs6490-rb3gen2-industrial-mezzanine.dtbo qcom/qcs6490-rb3gen2-vision-mezzanine.dtbo"

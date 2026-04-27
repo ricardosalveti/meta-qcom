@@ -1,0 +1,9 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/siemens/kas/master/kas/schema-kas.json
+# KAS fragment to override image target for FIT-based boot
+# Use with: kas shell ci/rb3gen2-core-kit.yml:ci/u-boot-qcom.yml:ci/kernel-fit-image.yml:ci/rb3gen2-core-kit-fit-image.yml
+
+header:
+  version: 14
+
+target:
+  - esp-qcom-fit-image
