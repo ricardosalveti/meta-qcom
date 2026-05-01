@@ -14,17 +14,163 @@ permissions:
   packages: read
 
 jobs:
+  kas-lock-setup:
+    if: github.repository_owner == 'qualcomm-linux'
+    runs-on: ubuntu-latest
+    outputs:
+      base-lock-exists: ${{ steps.check-base.outputs.lock_exists }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Check for base.lock.yml
+        id: check-base
+        run: |
+          if [ -f ci/base.lock.yml ]; then
+            echo "lock_exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "lock_exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Generate qcom-distro lock file
+        run: |
+          # Get the current commit of meta-qcom-distro main branch, as it is not part of base.lock
+          COMMIT=$(git ls-remote https://github.com/qualcomm-linux/meta-qcom-distro refs/heads/main | cut -f1)
+
+          # Create the lock file with meta-qcom-distro commit
+          cat > ci/qcom-distro.lock.yml << EOF
+          header:
+            version: 14
+          overrides:
+            repos:
+              meta-qcom-distro:
+                commit: $COMMIT
+          EOF
+          echo "qcom-distro.lock.yml created with meta-qcom-distro commit: $COMMIT"
+
+      - name: Upload qcom-distro lock file
+        uses: actions/upload-artifact@v6
+        with:
+          name: qcom-distro-lock
+          path: ci/qcom-distro.lock.yml
+
+  calculate-build-hash:
+    needs: kas-lock-setup
+    if: github.repository_owner == 'qualcomm-linux'
+    runs-on: ubuntu-latest
+    outputs:
+      run-build: ${{ steps.final-compare.outputs.run_build }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download qcom-distro lock file
+        uses: actions/download-artifact@v7
+        with:
+          name: qcom-distro-lock
+          path: ci
+
+      - name: Download previous build hash
+        id: download
+        continue-on-error: true
+        uses: actions/download-artifact@v7
+        with:
+          name: nightly-build-hash
+          path: ${{ runner.temp }}/prev-hash
+
+      - name: Extract meta-qcom-distro commit
+        id: get-distro-commit
+        run: |
+          COMMIT=$(grep "commit:" ci/qcom-distro.lock.yml | awk '{print $NF}')
+          echo "distro_commit=$COMMIT" >> $GITHUB_OUTPUT
+          echo "meta-qcom-distro commit: $COMMIT"
+
+      - name: Calculate final combined build hash
+        id: calc-hash
+        env:
+          BASE_LOCK_EXISTS: ${{ needs.kas-lock-setup.outputs.base-lock-exists }}
+        run: |
+          # Combine three factors when base.lock.yml is available:
+          # 1. base.lock.yml - pinned repos
+          # 2. meta-qcom-distro commit - unpinned distro
+          # 3. meta-qcom tree state - this layer
+
+          DISTRO_COMMIT="${{ steps.get-distro-commit.outputs.distro_commit }}"
+          METACOM_TREE=$(git rev-parse HEAD:meta-qcom)
+
+          if [ "$BASE_LOCK_EXISTS" = "true" ]; then
+            HASH=$(printf '%s\n%s\n%s' "$(cat ci/base.lock.yml)" "$DISTRO_COMMIT" "$METACOM_TREE" | sha256sum | cut -d' ' -f1)
+            echo "run_hash=$HASH" >> $GITHUB_OUTPUT
+            echo "Final build run hash (3-factor): $HASH"
+          else
+            # base.lock.yml missing - can't determine if pinned repos changed
+            # Use a simple 2-factor hash for storage, but will always build
+            HASH=$(printf '%s\n%s' "$DISTRO_COMMIT" "$METACOM_TREE" | sha256sum | cut -d' ' -f1)
+            echo "run_hash=$HASH" >> $GITHUB_OUTPUT
+            echo "base.lock.yml missing - cannot verify pinned repo versions"
+            echo "The file must be restored to enable proper build skipping"
+          fi
+
+          # Store run hash for next run
+          echo "$HASH" > /tmp/build-hash.txt
+
+      - name: Upload build hash for next nightly run
+        uses: actions/upload-artifact@v6
+        with:
+          name: nightly-build-hash
+          path: /tmp/build-hash.txt
+          retention-days: 30
+          overwrite: true
+
+      - name: Compare with previous final hash
+        id: final-compare
+        env:
+          BASE_LOCK_EXISTS: ${{ needs.kas-lock-setup.outputs.base-lock-exists }}
+        run: |
+          if [ ! -f "${{ runner.temp }}/prev-hash/build-hash.txt" ]; then
+            echo "run_build=true" >> $GITHUB_OUTPUT
+            echo "No previous hash found, will build"
+            exit 0
+          fi
+
+          # If base.lock.yml is missing, always build (can't verify dependencies)
+          if [ "$BASE_LOCK_EXISTS" != "true" ]; then
+            echo "run_build=true" >> $GITHUB_OUTPUT
+            echo "base.lock.yml missing - building to ensure pinned repos are not out of sync"
+            exit 0
+          fi
+
+          PREV_HASH=$(cat "${{ runner.temp }}/prev-hash/build-hash.txt")
+          CURRENT="${{ steps.calc-hash.outputs.run_hash }}"
+
+          echo "Previous final hash: $PREV_HASH"
+          echo "Current final hash:  $CURRENT"
+
+          if [ "$CURRENT" = "$PREV_HASH" ]; then
+            echo "run_build=false" >> $GITHUB_OUTPUT
+            echo "Final hash matches: no build needed"
+          else
+            echo "run_build=true" >> $GITHUB_OUTPUT
+            echo "Final hash differs: build needed"
+          fi
+
   build-nightly:
+    if: needs.calculate-build-hash.outputs.run-build == 'true'
+    needs: calculate-build-hash
     uses: ./.github/workflows/build-yocto.yml
   test-nightly:
+    if: needs.calculate-build-hash.outputs.run-build == 'true'
     uses: ./.github/workflows/test.yml
-    needs: build-nightly
+    needs: [calculate-build-hash, build-nightly]
     secrets: inherit
     with:
       build_id: ${{ github.run_id }}
   publish-test-results:
+    if: needs.calculate-build-hash.outputs.run-build == 'true'
     uses: ./.github/workflows/publish-results.yml
-    needs: test-nightly
+    needs: [calculate-build-hash, test-nightly]
     secrets: inherit
     with:
       workflow_id: ${{ github.run_id }}
