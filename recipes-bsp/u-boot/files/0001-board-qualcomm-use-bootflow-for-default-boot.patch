@@ -1,0 +1,37 @@
+From 67e63f070e7c5419e96c5c065affc2aa0a00061b Mon Sep 17 00:00:00 2001
+From: Ricardo Salveti <ricardo.salveti@oss.qualcomm.com>
+Date: Thu, 14 May 2026 19:33:33 +0000
+Subject: [PATCH] board/qualcomm: use bootflow for default boot
+
+The Qualcomm default environment currently boots only with
+'bootefi bootmgr'. This bypasses the standard boot flow used to
+discover extlinux and script boot entries, which are commonly used
+for FIT-based Linux boots.
+
+Switch do_boot to 'bootflow scan -lb' so bootstd handles boot method
+selection. This keeps EFI support available through the EFI boot
+methods while also enabling extlinux/boot.scr based bootflows by
+default.
+
+Upstream-Status: Submitted [https://lists.denx.de/pipermail/u-boot/2026-May/618641.html]
+
+Signed-off-by: Ricardo Salveti <ricardo.salveti@oss.qualcomm.com>
+---
+ board/qualcomm/default.env | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/board/qualcomm/default.env b/board/qualcomm/default.env
+index 429d71d57f3..e61c99870e6 100644
+--- a/board/qualcomm/default.env
++++ b/board/qualcomm/default.env
+@@ -3,7 +3,7 @@ stdout=serial,vidconsole
+ stderr=serial,vidconsole
+ preboot=scsi scan; usb start; if test "${reboot-mode}" = "bootloader"; then run fastboot; fi
+ fastboot=fastboot -l $fastboot_addr_r usb 0
+-do_boot=bootefi bootmgr
++do_boot=bootflow scan -lb
+ bootmenu_0=Boot first available device=run do_boot
+ bootmenu_1=Enable fastboot mode=run fastboot
+ bootmenu_2=Reset device=reset
+--
+2.47.3
