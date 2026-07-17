@@ -27,6 +27,12 @@ concurrency:
 
 env:
   CACHE_DIR: /efs/qli/meta-qcom
+  # S3-backed sstate experiment: point SSTATE_S3_URI at the bucket/prefix
+  # backing the S3 Files mount below (e.g. s3://<sstate-bucket>/qli/meta-qcom)
+  # to move the sstate cache from EFS to S3. Leave empty to keep the EFS
+  # sstate cache. DL_DIR stays on EFS either way.
+  SSTATE_S3_URI: ""
+  SSTATE_MIRROR_DIR: /s3efs/qli/meta-qcom
   KAS_CLONE_DEPTH: 1
 
 jobs:
@@ -144,7 +150,16 @@ jobs:
       - name: Setup cache variables (used by oe-selftest)
         run: |
           echo "DL_DIR=${CACHE_DIR}/downloads" >> $GITHUB_ENV
-          echo "SSTATE_DIR=${CACHE_DIR}/sstate-cache-$(date '+%Y-%m')" >> $GITHUB_ENV
+          SSTATE_NAME="sstate-cache-$(date '+%Y-%m')"
+          if [ -n "${SSTATE_S3_URI}" ]; then
+            # Read-only consumer of the S3-backed sstate cache; the checks
+            # do not publish sstate back.
+            echo "SSTATE_DIR=${RUNNER_TEMP}/sstate-cache" >> $GITHUB_ENV
+            echo "SSTATE_MIRRORS=file://.* file://${SSTATE_MIRROR_DIR}/${SSTATE_NAME}/PATH;downloadfilename=PATH" >> $GITHUB_ENV
+            echo "KAS_OPTS=--runtime-args --volume=${SSTATE_MIRROR_DIR}:${SSTATE_MIRROR_DIR}:ro" >> $GITHUB_ENV
+          else
+            echo "SSTATE_DIR=${CACHE_DIR}/${SSTATE_NAME}" >> $GITHUB_ENV
+          fi
 
       - name: Run Yocto patchreview
         run: |
@@ -163,11 +178,15 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       CACHE_DIR: ${{ steps.compile_env.outputs.CACHE_DIR }}
+      SSTATE_S3_URI: ${{ steps.compile_env.outputs.SSTATE_S3_URI }}
+      SSTATE_MIRROR_DIR: ${{ steps.compile_env.outputs.SSTATE_MIRROR_DIR }}
     steps:
       - name: Setup compile variables
         id: compile_env
         run: |
           echo "CACHE_DIR=${{env.CACHE_DIR}}" >> $GITHUB_OUTPUT
+          echo "SSTATE_S3_URI=${{env.SSTATE_S3_URI}}" >> $GITHUB_OUTPUT
+          echo "SSTATE_MIRROR_DIR=${{env.SSTATE_MIRROR_DIR}}" >> $GITHUB_OUTPUT
 
   compile_warm_up:
     needs: [kas-setup, github-cache-check, compile-env]
@@ -205,6 +224,8 @@ jobs:
       kernel_yaml: ${{matrix.kernel.yamlfile}}
       kernel_dirname: ${{matrix.kernel.dirname}}
       cache_dir: ${{ needs.compile-env.outputs.CACHE_DIR }}
+      sstate_s3_uri: ${{ needs.compile-env.outputs.SSTATE_S3_URI }}
+      sstate_mirror_dir: ${{ needs.compile-env.outputs.SSTATE_MIRROR_DIR }}
 
   compile_sdk:
     needs: [github-cache-check, compile_warm_up, compile-env]
@@ -223,6 +244,8 @@ jobs:
       kernel_yaml: ''
       kernel_dirname: ''
       cache_dir: ${{ needs.compile-env.outputs.CACHE_DIR }}
+      sstate_s3_uri: ${{ needs.compile-env.outputs.SSTATE_S3_URI }}
+      sstate_mirror_dir: ${{ needs.compile-env.outputs.SSTATE_MIRROR_DIR }}
 
   compile:
     needs: [github-cache-check, compile_warm_up, compile-env]
@@ -456,6 +479,8 @@ jobs:
       kernel_yaml: ${{matrix.kernel.yamlfile}}
       kernel_dirname: ${{matrix.kernel.dirname}}
       cache_dir: ${{ needs.compile-env.outputs.CACHE_DIR }}
+      sstate_s3_uri: ${{ needs.compile-env.outputs.SSTATE_S3_URI }}
+      sstate_mirror_dir: ${{ needs.compile-env.outputs.SSTATE_MIRROR_DIR }}
 
   publish_summary:
     needs: [github-cache-check, compile, compile_sdk]

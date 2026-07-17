@@ -38,6 +38,14 @@ on:
       cache_dir:
         required: true
         type: string
+      sstate_s3_uri:
+        required: false
+        type: string
+        default: ""
+      sstate_mirror_dir:
+        required: false
+        type: string
+        default: ""
 
 env:
   KAS_CLONE_DEPTH: 1
@@ -74,9 +82,21 @@ jobs:
       - name: Setup build variables
         shell: bash
         run: |
-          # use a monthly sstate cache folder
           echo "DL_DIR=${INPUTS_CACHE_DIR}/downloads" >> $GITHUB_ENV
-          echo "SSTATE_DIR=${INPUTS_CACHE_DIR}/sstate-cache-$(date '+%Y-%m')" >> $GITHUB_ENV
+          # use a monthly sstate cache folder
+          SSTATE_NAME="sstate-cache-$(date '+%Y-%m')"
+          if [ -n "${INPUTS_SSTATE_S3_URI}" ]; then
+            # S3-backed sstate: bitbake writes into a job-local SSTATE_DIR
+            # and reads shared objects through the S3 Files mount, which is
+            # bind-mounted read-only inside the kas container. New objects
+            # are published after the build with a one-way `aws s3 sync`.
+            echo "SSTATE_DIR=${RUNNER_TEMP}/sstate-cache" >> $GITHUB_ENV
+            echo "SSTATE_MIRRORS=file://.* file://${INPUTS_SSTATE_MIRROR_DIR}/${SSTATE_NAME}/PATH;downloadfilename=PATH" >> $GITHUB_ENV
+            echo "SSTATE_S3_DEST=${INPUTS_SSTATE_S3_URI}/${SSTATE_NAME}" >> $GITHUB_ENV
+            echo "KAS_OPTS=--runtime-args --volume=${INPUTS_SSTATE_MIRROR_DIR}:${INPUTS_SSTATE_MIRROR_DIR}:ro" >> $GITHUB_ENV
+          else
+            echo "SSTATE_DIR=${INPUTS_CACHE_DIR}/${SSTATE_NAME}" >> $GITHUB_ENV
+          fi
           echo "KAS_WORK_DIR=${PWD}/../kas" >> $GITHUB_ENV
           echo "KAS_YAMLS=ci/ci.yml:ci/${INPUTS_MACHINE}.yml${INPUTS_DISTRO_YAML}${INPUTS_KERNEL_YAML}:ci/build-id.yml" >> $GITHUB_ENV
           echo "INPUTS_CACHE_DIR=${INPUTS_CACHE_DIR}" >> $GITHUB_ENV
@@ -97,6 +117,8 @@ jobs:
           EOF
         env:
           INPUTS_CACHE_DIR: ${{inputs.cache_dir}}
+          INPUTS_SSTATE_S3_URI: ${{inputs.sstate_s3_uri}}
+          INPUTS_SSTATE_MIRROR_DIR: ${{inputs.sstate_mirror_dir}}
           INPUTS_MACHINE: ${{ inputs.machine }}
           INPUTS_DISTRO_YAML: ${{ inputs.distro_yaml }}
           INPUTS_KERNEL_YAML: ${{ inputs.kernel_yaml }}
@@ -106,13 +128,13 @@ jobs:
         shell: bash
         run: |
           mkdir $KAS_WORK_DIR
-          $KAS_CONTAINER dump --resolve-env --resolve-local --resolve-refs ${KAS_YAMLS} > kas-build.yml
+          $KAS_CONTAINER ${KAS_OPTS} dump --resolve-env --resolve-local --resolve-refs ${KAS_YAMLS} > kas-build.yml
 
       - name: Kas build world
         if:  inputs.world
         shell: bash
         run: |
-          $KAS_CONTAINER build ${KAS_YAMLS}:ci/world.yml
+          $KAS_CONTAINER ${KAS_OPTS} build ${KAS_YAMLS}:ci/world.yml
 
       - name: Kas build world (buildstats)
         if:  inputs.world
@@ -126,7 +148,7 @@ jobs:
         if:  inputs.target
         shell: bash
         run: |
-          $KAS_CONTAINER build ${KAS_YAMLS}
+          $KAS_CONTAINER ${KAS_OPTS} build ${KAS_YAMLS}
 
       - name: Kas build images (buildstats)
         if:  inputs.target
@@ -139,7 +161,7 @@ jobs:
         if:  inputs.sdk
         shell: bash
         run: |
-          $KAS_CONTAINER build ${KAS_YAMLS} --task populate_sdk \
+          $KAS_CONTAINER ${KAS_OPTS} build ${KAS_YAMLS} --task populate_sdk \
             --target qcom-multimedia-image \
             --target qcom-multimedia-proprietary-image
 
@@ -150,6 +172,21 @@ jobs:
           ci/kas-container-shell-helper.sh ci/yocto-buildstats.sh
           rename.ul -av buildstats buildstats-sdk $KAS_WORK_DIR/build/buildstats*
           mv $KAS_WORK_DIR/build/buildstats* .
+
+      - name: Publish sstate to S3 (one-way sync)
+        # Runs on build failure too: sstate from completed tasks is valid
+        # and speeds up the retry.
+        if: ${{ !cancelled() && inputs.sstate_s3_uri != '' }}
+        shell: bash
+        run: |
+          # Mirror hits land in the job-local SSTATE_DIR as symlinks into
+          # the read-only mirror mount, so --no-follow-symlinks uploads only
+          # the objects this job built. --size-only avoids re-uploading
+          # objects whose mtime changed from sstate cache-hit touches.
+          # One-way and additive: no --delete, nothing is removed from S3.
+          [ -d "${SSTATE_DIR}" ] || exit 0
+          aws s3 sync "${SSTATE_DIR}/" "${SSTATE_S3_DEST}/" \
+            --no-follow-symlinks --size-only --no-progress
 
       - uses: actions/upload-artifact@v6
         with:
