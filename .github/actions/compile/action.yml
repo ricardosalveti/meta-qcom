@@ -119,7 +119,7 @@ runs:
       with:
         path: ./uploads
         destination: ${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.run_id }}-${{ github.run_attempt }}/
-        s3_bucket: qcom-prd-gh-artifacts
+        s3_bucket: qcom-stg-gh-artifacts
 
     - name: "Print output"
       shell: bash

@@ -1,9 +1,7 @@
 name: Build on push
 
 on:
-  push:
-    branches:
-      - master
+  workflow_dispatch:
 
 permissions:
   checks: write
@@ -14,7 +12,11 @@ permissions:
 jobs:
   build:
     uses: ./.github/workflows/build-yocto.yml
+  # Hardware tests (test.yml) are disabled for staging validation: the run
+  # only exercises the full build matrix and the S3 sstate cache, not LAVA.
+  # Skipping "test" also skips "publish-test-results" via its needs.
   test:
+    if: false
     uses: ./.github/workflows/test.yml
     needs: [build]
     secrets: inherit

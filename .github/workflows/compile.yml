@@ -45,7 +45,7 @@ env:
 jobs:
   reusable_compile_job:
     if: inputs.enabled
-    runs-on: [self-hosted, qcom-u2404, amd64]
+    runs-on: [self-hosted, qcom-stg-u2404, amd64]
     name: ${{ inputs.name }}
     steps:
       - uses: actions/checkout@v6
@@ -222,7 +222,7 @@ jobs:
         with:
           path: ./uploads
           destination: ${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ github.run_id }}-${{ github.run_attempt }}/
-          s3_bucket: qcom-prd-gh-artifacts
+          s3_bucket: qcom-stg-gh-artifacts
           object_tag: ${{ env.OBJECT_TAG }}
           build_type: ${{ env.BUILD_TYPE }}
           build_branch: "branch=${{ github.base_ref || github.ref_name }}"

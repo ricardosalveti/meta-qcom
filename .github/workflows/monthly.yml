@@ -1,13 +1,14 @@
 name: Monthly job
 
 on:
+  workflow_dispatch:
   schedule:
   - cron: "22 10 5 * *"   # montly job - at "random" time - top of hour can be busy in github
 
 jobs:
   sstate-cache-cleanup:
-    if: github.repository_owner == 'qualcomm-linux'
-    runs-on: [self-hosted, qcom-sm-u2404, sm-amd64]
+    if: github.repository_owner == 'qualcomm-linux-stg'
+    runs-on: [self-hosted, qcom-stg-u2404, amd64-ssd]
     timeout-minutes: 720
     steps:
       - name: Clean up the persistant sstate-cache dir
