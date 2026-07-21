@@ -20,3 +20,16 @@ local_conf_header:
     # ':prepend' applies after ci/mirror.yml's assignment regardless of the
     # local.conf merge order.
     SSTATE_MIRRORS:prepend = "file://.* file:///s3efs/qli/meta-qcom/sstate-cache/PATH;downloadfilename=PATH "
+  git-dl: |
+    # Git clone dirs are mutated in place on every update (git fetch, repack,
+    # pack-refs, prune-packed under DL_DIR/git2), which is unsafe when many
+    # parallel jobs share DL_DIR on the S3 Files mount: another job's repack
+    # between this job's do_fetch and do_unpack can make the shared clonedir
+    # transiently look stale or corrupt (seen as opencv do_unpack "clone
+    # directory not available or not up to date"). The per-download lock does
+    # not cover the fetch-to-unpack window, so instead keep the mutable clone
+    # dirs job-local and share git history through the atomically renamed
+    # git2_*.tar.gz mirror tarballs in DL_DIR, which the fetcher restores
+    # from automatically.
+    GITDIR = "${TMPDIR}/git2"
+    BB_GENERATE_MIRROR_TARBALLS = "1"
