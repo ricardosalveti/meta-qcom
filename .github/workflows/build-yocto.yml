@@ -26,13 +26,18 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  CACHE_DIR: /efs/qli/meta-qcom
+  # Shared cache root on the S3 Files mount; DL_DIR lives directly under it
+  # (downloads/), used read-write through the kas-container bind mount. EFS
+  # is no longer used. Downloads are kept forever (objects written through
+  # the mount carry no retention tag); pruning the downloads/ prefix, if ever
+  # needed, is a bucket lifecycle concern.
+  CACHE_DIR: /s3efs/qli/meta-qcom
   # S3-backed sstate cache: SSTATE_S3_URI is the bucket/prefix backing the
   # S3 Files mount at SSTATE_MIRROR_DIR. The build and check jobs read shared
   # objects through that read-only mount and publish what they built back to
-  # the bucket with a one-way `aws s3 sync` (ci/sstate-s3-sync.sh). DL_DIR
-  # stays on EFS. Published objects are tagged with SSTATE_RETENTION so the
-  # bucket lifecycle expires them, so the cache needs no periodic cleanup.
+  # the bucket with a one-way `aws s3 sync` (ci/sstate-s3-sync.sh). Published
+  # objects are tagged with SSTATE_RETENTION so the bucket lifecycle expires
+  # them, so the cache needs no periodic cleanup.
   SSTATE_S3_URI: "s3://qcom-stg-gh-artifacts/s3efs/s3efs/qli/meta-qcom"
   SSTATE_MIRROR_DIR: /s3efs/qli/meta-qcom
   SSTATE_RETENTION: 15d
@@ -152,13 +157,15 @@ jobs:
 
       - name: Setup cache variables (used by oe-selftest)
         run: |
-          # Full EFS->S3 sstate migration: read shared objects from the S3
+          # Full EFS->S3 migration: read shared sstate objects from the S3
           # Files mirror (bind-mounted read-only via KAS_OPTS) into a
           # job-local SSTATE_DIR, falling back to the public upstream Yocto
           # mirror. SSTATE_MIRRORS reaches bitbake through the kas-container
           # env passthrough (base.yml sets no mirror of its own; the compile
           # jobs get the same pair from ci/ci.yml + ci/mirror.yml instead).
-          # Only DL_DIR stays on EFS.
+          # DL_DIR is the shared downloads folder on the same S3 Files mount,
+          # used read-write (bitbake's fetcher never hard-links into DL_DIR,
+          # so the mount's no-hardlink limitation does not apply there).
           echo "DL_DIR=${CACHE_DIR}/downloads" >> $GITHUB_ENV
           echo "SSTATE_DIR=${RUNNER_TEMP}/sstate-cache" >> $GITHUB_ENV
           echo "SSTATE_MIRRORS=file://.* file://${SSTATE_MIRROR_DIR}/sstate-cache/PATH;downloadfilename=PATH file://.* http://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH" >> $GITHUB_ENV

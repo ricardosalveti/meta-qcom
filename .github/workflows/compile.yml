@@ -92,7 +92,11 @@ jobs:
           # is set in ci/ci.yml (SSTATE_MIRRORS). Objects the job built are
           # published back to the bucket after the build with a one-way
           # `aws s3 sync` and tagged for expiry by the bucket lifecycle, so
-          # the cache needs no periodic cleanup. Only DL_DIR stays on EFS.
+          # the cache needs no periodic cleanup. DL_DIR is the shared
+          # downloads folder on the same S3 Files mount, used read-write
+          # through the kas-container bind mount (the fetcher never
+          # hard-links into DL_DIR, so the no-hardlink limitation that forced
+          # the sstate mirror+sync split does not apply to downloads).
           echo "SSTATE_DIR=${RUNNER_TEMP}/sstate-cache" >> $GITHUB_ENV
           echo "SSTATE_S3_DEST=${INPUTS_SSTATE_S3_URI}/sstate-cache" >> $GITHUB_ENV
           echo "KAS_OPTS=--runtime-args --volume=${INPUTS_SSTATE_MIRROR_DIR}:${INPUTS_SSTATE_MIRROR_DIR}:ro" >> $GITHUB_ENV
