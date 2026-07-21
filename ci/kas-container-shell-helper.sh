@@ -17,4 +17,6 @@ SCRIPT=${SCRIPT#$TOPDIR/}
 # on ci the kas-container is not on the default path
 KAS_CONTAINER=${KAS_CONTAINER:-$(which kas-container)}
 
-exec $KAS_CONTAINER shell $TOPDIR/ci/base.yml --command "/repo/$SCRIPT /repo /work"
+# KAS_OPTS optionally carries extra kas-container options, e.g. a read-only
+# volume for the sstate mirror (--runtime-args --volume=/path:/path:ro)
+exec $KAS_CONTAINER ${KAS_OPTS:-} shell $TOPDIR/ci/base.yml --command "/repo/$SCRIPT /repo /work"

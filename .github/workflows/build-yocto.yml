@@ -27,6 +27,15 @@ concurrency:
 
 env:
   CACHE_DIR: /efs/qli/meta-qcom
+  # S3-backed sstate cache: SSTATE_S3_URI is the bucket/prefix backing the
+  # S3 Files mount at SSTATE_MIRROR_DIR. The build and check jobs read shared
+  # objects through that read-only mount and publish what they built back to
+  # the bucket with a one-way `aws s3 sync` (ci/sstate-s3-sync.sh). DL_DIR
+  # stays on EFS. Published objects are tagged with SSTATE_RETENTION so the
+  # bucket lifecycle expires them, so the cache needs no periodic cleanup.
+  SSTATE_S3_URI: "s3://qcom-stg-gh-artifacts/s3efs/s3efs/qli/meta-qcom"
+  SSTATE_MIRROR_DIR: /s3efs/qli/meta-qcom
+  SSTATE_RETENTION: 15d
   KAS_CLONE_DEPTH: 1
 
 jobs:
@@ -143,8 +152,18 @@ jobs:
 
       - name: Setup cache variables (used by oe-selftest)
         run: |
+          # Full EFS->S3 sstate migration: read shared objects from the S3
+          # Files mirror (bind-mounted read-only via KAS_OPTS) into a
+          # job-local SSTATE_DIR, falling back to the public upstream Yocto
+          # mirror. SSTATE_MIRRORS reaches bitbake through the kas-container
+          # env passthrough (base.yml sets no mirror of its own; the compile
+          # jobs get the same pair from ci/ci.yml + ci/mirror.yml instead).
+          # Only DL_DIR stays on EFS.
           echo "DL_DIR=${CACHE_DIR}/downloads" >> $GITHUB_ENV
-          echo "SSTATE_DIR=${CACHE_DIR}/sstate-cache-$(date '+%Y-%m')" >> $GITHUB_ENV
+          echo "SSTATE_DIR=${RUNNER_TEMP}/sstate-cache" >> $GITHUB_ENV
+          echo "SSTATE_MIRRORS=file://.* file://${SSTATE_MIRROR_DIR}/sstate-cache/PATH;downloadfilename=PATH file://.* http://sstate.yoctoproject.org/all/PATH;downloadfilename=PATH" >> $GITHUB_ENV
+          echo "SSTATE_S3_DEST=${SSTATE_S3_URI}/sstate-cache" >> $GITHUB_ENV
+          echo "KAS_OPTS=--runtime-args --volume=${SSTATE_MIRROR_DIR}:${SSTATE_MIRROR_DIR}:ro" >> $GITHUB_ENV
 
       - name: Run Yocto patchreview
         run: |
@@ -158,16 +177,28 @@ jobs:
         run: |
           ci/kas-container-shell-helper.sh ci/oe-selftest.sh
 
+      - name: Publish sstate to S3 (one-way sync)
+        # The check jobs build objects the compile matrix does not (selftest
+        # and check-layer configurations), so publish them to the shared
+        # cache. Runs on failure and cancellation too: sstate from completed
+        # tasks is valid (cancelled jobs get 5 minutes before force-kill).
+        if: ${{ always() }}
+        run: ci/sstate-s3-sync.sh
+
   compile-env:
     if: github.repository_owner == 'qualcomm-linux-stg'
     runs-on: ubuntu-latest
     outputs:
       CACHE_DIR: ${{ steps.compile_env.outputs.CACHE_DIR }}
+      SSTATE_S3_URI: ${{ steps.compile_env.outputs.SSTATE_S3_URI }}
+      SSTATE_MIRROR_DIR: ${{ steps.compile_env.outputs.SSTATE_MIRROR_DIR }}
     steps:
       - name: Setup compile variables
         id: compile_env
         run: |
           echo "CACHE_DIR=${{env.CACHE_DIR}}" >> $GITHUB_OUTPUT
+          echo "SSTATE_S3_URI=${{env.SSTATE_S3_URI}}" >> $GITHUB_OUTPUT
+          echo "SSTATE_MIRROR_DIR=${{env.SSTATE_MIRROR_DIR}}" >> $GITHUB_OUTPUT
 
   compile_warm_up:
     needs: [kas-setup, github-cache-check, compile-env]
@@ -205,6 +236,8 @@ jobs:
       kernel_yaml: ${{matrix.kernel.yamlfile}}
       kernel_dirname: ${{matrix.kernel.dirname}}
       cache_dir: ${{ needs.compile-env.outputs.CACHE_DIR }}
+      sstate_s3_uri: ${{ needs.compile-env.outputs.SSTATE_S3_URI }}
+      sstate_mirror_dir: ${{ needs.compile-env.outputs.SSTATE_MIRROR_DIR }}
 
   compile_sdk:
     needs: [github-cache-check, compile_warm_up, compile-env]
@@ -223,6 +256,8 @@ jobs:
       kernel_yaml: ''
       kernel_dirname: ''
       cache_dir: ${{ needs.compile-env.outputs.CACHE_DIR }}
+      sstate_s3_uri: ${{ needs.compile-env.outputs.SSTATE_S3_URI }}
+      sstate_mirror_dir: ${{ needs.compile-env.outputs.SSTATE_MIRROR_DIR }}
 
   compile:
     needs: [github-cache-check, compile_warm_up, compile-env]
@@ -456,6 +491,8 @@ jobs:
       kernel_yaml: ${{matrix.kernel.yamlfile}}
       kernel_dirname: ${{matrix.kernel.dirname}}
       cache_dir: ${{ needs.compile-env.outputs.CACHE_DIR }}
+      sstate_s3_uri: ${{ needs.compile-env.outputs.SSTATE_S3_URI }}
+      sstate_mirror_dir: ${{ needs.compile-env.outputs.SSTATE_MIRROR_DIR }}
 
   publish_summary:
     needs: [github-cache-check, compile, compile_sdk]

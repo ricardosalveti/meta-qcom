@@ -11,3 +11,12 @@ local_conf_header:
     FIRMWARE_COMPRESSION:qcom-armv8a = "zst"
     # Workaround needed due https://bugzilla.yoctoproject.org/show_bug.cgi?id=16010
     PACKAGE_CLASSES = "package_rpm"
+  sstate-mirror: |
+    # Prepend the S3-backed sstate cache ahead of the upstream Yocto mirror
+    # from ci/mirror.yml, so CI builds try the fast local S3 Files mount
+    # (bind-mounted read-only; path provided by SSTATE_MIRROR_DIR / KAS_OPTS
+    # in the workflows) first and fall back to the public mirror. Set here
+    # rather than via a generated fragment because ci.yml is CI only. The
+    # ':prepend' applies after ci/mirror.yml's assignment regardless of the
+    # local.conf merge order.
+    SSTATE_MIRRORS:prepend = "file://.* file:///s3efs/qli/meta-qcom/sstate-cache/PATH;downloadfilename=PATH "
