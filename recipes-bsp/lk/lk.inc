@@ -1,3 +1,5 @@
+require recipes-bsp/lk/lk-build-host.inc
+
 LICENSE = "MIT"
 LIC_FILES_CHKSUM = "file://LICENSE;md5=5a1abdab641eec675725c843f43f03af"
 
