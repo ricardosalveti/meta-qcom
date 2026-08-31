@@ -11,7 +11,8 @@ defaults:
 
 repos:
   meta-qcom-distro:
-    url: https://github.com/qualcomm-linux/meta-qcom-distro
+    url: https://github.com/ricardosalveti/meta-qcom-distro
+    branch: qli-2.0-qimsdk-2.0
 
   meta-openembedded:
     url: https://github.com/openembedded/meta-openembedded
